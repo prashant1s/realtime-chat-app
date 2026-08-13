@@ -1,3 +1,4 @@
+import crypto from "crypto";
 import { generateToken } from "../lib/utils.js";
 import User from "../models/user.model.js";
 import bcrypt from "bcryptjs";
@@ -75,9 +76,45 @@ export const login = async (req, res) => {
   }
 };
 
+export const guestLogin = async (req, res) => {
+  try {
+    const guestId = crypto.randomBytes(4).toString("hex");
+    const randomPassword = crypto.randomBytes(16).toString("hex");
+    const salt = await bcrypt.genSalt(10);
+    const hashedPassword = await bcrypt.hash(randomPassword, salt);
+
+    const guestUser = new User({
+      fullName: `Guest-${guestId}`,
+      email: `guest-${guestId}@guest.local`,
+      password: hashedPassword,
+      isGuest: true,
+    });
+
+    await guestUser.save();
+
+    generateToken(guestUser._id, res);
+
+    res.status(201).json({
+      _id: guestUser._id,
+      fullName: guestUser.fullName,
+      email: guestUser.email,
+      profilePic: guestUser.profilePic,
+      isGuest: guestUser.isGuest,
+    });
+  } catch (error) {
+    console.log("Error in guestLogin controller", error.message);
+    res.status(500).json({ message: "Internal Server Error" });
+  }
+};
+
 export const logout = (req, res) => {
   try {
-    res.cookie("jwt", "", { maxAge: 0 });
+    const isProduction = process.env.NODE_ENV === "production";
+    res.cookie("jwt", "", {
+      maxAge: 0,
+      sameSite: isProduction ? "none" : "lax",
+      secure: isProduction,
+    });
     res.status(200).json({ message: "Logged out successfully" });
   } catch (error) {
     console.log("Error in logout controller", error.message);

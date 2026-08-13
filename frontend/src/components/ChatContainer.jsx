@@ -13,8 +13,8 @@ const ChatContainer = () => {
     getMessages,
     isMessagesLoading,
     selectedUser,
-    subscribeToMessages,
-    unsubscribeFromMessages,
+    startMessagesPolling,
+    stopMessagesPolling,
   } = useChatStore();
   const { authUser } = useAuthStore();
   const messageEndRef = useRef(null);
@@ -22,10 +22,10 @@ const ChatContainer = () => {
   useEffect(() => {
     getMessages(selectedUser._id);
 
-    subscribeToMessages();
+    startMessagesPolling(selectedUser._id);
 
-    return () => unsubscribeFromMessages();
-  }, [selectedUser._id, getMessages, subscribeToMessages, unsubscribeFromMessages]);
+    return () => stopMessagesPolling();
+  }, [selectedUser._id, getMessages, startMessagesPolling, stopMessagesPolling]);
 
   useEffect(() => {
     if (messageEndRef.current && messages) {

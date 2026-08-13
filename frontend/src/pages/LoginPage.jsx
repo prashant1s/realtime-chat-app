@@ -10,7 +10,7 @@ const LoginPage = () => {
     email: "",
     password: "",
   });
-  const { login, isLoggingIn } = useAuthStore();
+  const { login, isLoggingIn, guestLogin, isGuestLoggingIn } = useAuthStore();
 
   const handleSubmit = async (e) => {
     e.preventDefault();
@@ -96,6 +96,24 @@ const LoginPage = () => {
               )}
             </button>
           </form>
+
+          <div className="divider">OR</div>
+
+          <button
+            type="button"
+            className="btn btn-outline w-full"
+            disabled={isGuestLoggingIn}
+            onClick={() => guestLogin()}
+          >
+            {isGuestLoggingIn ? (
+              <>
+                <Loader2 className="h-5 w-5 animate-spin" />
+                Loading...
+              </>
+            ) : (
+              "Continue as Guest"
+            )}
+          </button>
 
           <div className="text-center">
             <p className="text-base-content/60">

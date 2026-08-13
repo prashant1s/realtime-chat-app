@@ -1,25 +1,27 @@
 import { create } from "zustand";
 import { axiosInstance } from "../lib/axios.js";
 import toast from "react-hot-toast";
-import { io } from "socket.io-client";
 
-const BASE_URL = import.meta.env.MODE === "development" ? "http://localhost:5001" : "/";
+const getErrorMessage = (error) =>
+  error.response?.data?.message || error.message || "Something went wrong";
+
+const HEARTBEAT_INTERVAL = 10000;
 
 export const useAuthStore = create((set, get) => ({
   authUser: null,
   isSigningUp: false,
   isLoggingIn: false,
+  isGuestLoggingIn: false,
   isUpdatingProfile: false,
   isCheckingAuth: true,
-  onlineUsers: [],
-  socket: null,
+  heartbeatId: null,
 
   checkAuth: async () => {
     try {
       const res = await axiosInstance.get("/auth/check");
 
       set({ authUser: res.data });
-      get().connectSocket();
+      get().startHeartbeat();
     } catch (error) {
       console.log("Error in checkAuth:", error);
       set({ authUser: null });
@@ -34,9 +36,9 @@ export const useAuthStore = create((set, get) => ({
       const res = await axiosInstance.post("/auth/signup", data);
       set({ authUser: res.data });
       toast.success("Account created successfully");
-      get().connectSocket();
+      get().startHeartbeat();
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       set({ isSigningUp: false });
     }
@@ -49,11 +51,26 @@ export const useAuthStore = create((set, get) => ({
       set({ authUser: res.data });
       toast.success("Logged in successfully");
 
-      get().connectSocket();
+      get().startHeartbeat();
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       set({ isLoggingIn: false });
+    }
+  },
+
+  guestLogin: async () => {
+    set({ isGuestLoggingIn: true });
+    try {
+      const res = await axiosInstance.post("/auth/guest-login");
+      set({ authUser: res.data });
+      toast.success("Logged in as guest");
+
+      get().startHeartbeat();
+    } catch (error) {
+      toast.error(getErrorMessage(error));
+    } finally {
+      set({ isGuestLoggingIn: false });
     }
   },
 
@@ -62,9 +79,9 @@ export const useAuthStore = create((set, get) => ({
       await axiosInstance.post("/auth/logout");
       set({ authUser: null });
       toast.success("Logged out successfully");
-      get().disconnectSocket();
+      get().stopHeartbeat();
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     }
   },
 
@@ -76,32 +93,25 @@ export const useAuthStore = create((set, get) => ({
       toast.success("Profile updated successfully");
     } catch (error) {
       console.log("error in update profile:", error);
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       set({ isUpdatingProfile: false });
     }
   },
 
-  connectSocket: () => {
-    const { authUser } = get();
-    if (!authUser || get().socket?.connected) return;
-
-    const socket = io(BASE_URL, {
-      query: {
-        userId: authUser._id,
-      },
-    });
-    socket.connect();
-
-    set({ socket: socket });
-
-    socket.on("getOnlineUsers", (userIds) => {
-      set({ onlineUsers: userIds });
-    });
+  // Vercel serverless functions can't hold persistent Socket.io connections,
+  // so presence is tracked via a periodic authenticated ping instead; the
+  // backend stamps `lastSeen` on every authenticated request.
+  startHeartbeat: () => {
+    if (get().heartbeatId) return;
+    const id = setInterval(() => {
+      axiosInstance.get("/auth/check").catch(() => {});
+    }, HEARTBEAT_INTERVAL);
+    set({ heartbeatId: id });
   },
-  disconnectSocket: () => {
-    if (get().socket?.connected) get().socket.disconnect();
+  stopHeartbeat: () => {
+    const id = get().heartbeatId;
+    if (id) clearInterval(id);
+    set({ heartbeatId: null });
   },
 }));
-
-

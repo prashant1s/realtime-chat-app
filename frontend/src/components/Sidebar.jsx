@@ -1,21 +1,32 @@
 import { useEffect, useState } from "react";
 import { useChatStore } from "../store/useChatStore";
-import { useAuthStore } from "../store/useAuthStore";
 import SidebarSkeleton from "./skeletons/SidebarSkeleton";
 import { Users } from "lucide-react";
+import { isUserOnline } from "../lib/utils";
 
 const Sidebar = () => {
-  const { getUsers, users, selectedUser, setSelectedUser, isUsersLoading } = useChatStore();
+  const {
+    getUsers,
+    users,
+    selectedUser,
+    setSelectedUser,
+    isUsersLoading,
+    startUsersPolling,
+    stopUsersPolling,
+  } = useChatStore();
 
-  const { onlineUsers } = useAuthStore();
   const [showOnlineOnly, setShowOnlineOnly] = useState(false);
 
   useEffect(() => {
     getUsers();
-  }, [getUsers]);
+    startUsersPolling();
+    return () => stopUsersPolling();
+  }, [getUsers, startUsersPolling, stopUsersPolling]);
+
+  const onlineCount = users.filter((user) => isUserOnline(user.lastSeen)).length;
 
   const filteredUsers = showOnlineOnly
-    ? users.filter((user) => onlineUsers.includes(user._id))
+    ? users.filter((user) => isUserOnline(user.lastSeen))
     : users;
 
   if (isUsersLoading) return <SidebarSkeleton />;
@@ -38,7 +49,7 @@ const Sidebar = () => {
             />
             <span className="text-sm">Show online only</span>
           </label>
-          <span className="text-xs text-zinc-500">({onlineUsers.length - 1} online)</span>
+          <span className="text-xs text-zinc-500">({onlineCount} online)</span>
         </div>
       </div>
 
@@ -59,7 +70,7 @@ const Sidebar = () => {
                 alt={user.name}
                 className="size-12 object-cover rounded-full"
               />
-              {onlineUsers.includes(user._id) && (
+              {isUserOnline(user.lastSeen) && (
                 <span
                   className="absolute bottom-0 right-0 size-3 bg-green-500 
                   rounded-full ring-2 ring-zinc-900"
@@ -71,7 +82,7 @@ const Sidebar = () => {
             <div className="hidden lg:block text-left min-w-0">
               <div className="font-medium truncate">{user.fullName}</div>
               <div className="text-sm text-zinc-400">
-                {onlineUsers.includes(user._id) ? "Online" : "Offline"}
+                {isUserOnline(user.lastSeen) ? "Online" : "Offline"}
               </div>
             </div>
           </button>

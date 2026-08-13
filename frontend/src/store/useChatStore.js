@@ -1,7 +1,12 @@
 import { create } from "zustand";
 import toast from "react-hot-toast";
 import { axiosInstance } from "../lib/axios";
-import { useAuthStore } from "./useAuthStore";
+
+const getErrorMessage = (error) =>
+  error.response?.data?.message || error.message || "Something went wrong";
+
+const USERS_POLL_INTERVAL = 8000;
+const MESSAGES_POLL_INTERVAL = 3000;
 
 export const useChatStore = create((set, get) => ({
   messages: [],
@@ -9,6 +14,8 @@ export const useChatStore = create((set, get) => ({
   selectedUser: null,
   isUsersLoading: false,
   isMessagesLoading: false,
+  usersPollId: null,
+  messagesPollId: null,
 
   getUsers: async () => {
     set({ isUsersLoading: true });
@@ -16,7 +23,7 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.get("/messages/users");
       set({ users: res.data });
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       set({ isUsersLoading: false });
     }
@@ -28,7 +35,7 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.get(`/messages/${userId}`);
       set({ messages: res.data });
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     } finally {
       set({ isMessagesLoading: false });
     }
@@ -39,29 +46,32 @@ export const useChatStore = create((set, get) => ({
       const res = await axiosInstance.post(`/messages/send/${selectedUser._id}`, messageData);
       set({ messages: [...messages, res.data] });
     } catch (error) {
-      toast.error(error.response.data.message);
+      toast.error(getErrorMessage(error));
     }
   },
 
-  subscribeToMessages: () => {
-    const { selectedUser } = get();
-    if (!selectedUser) return;
-
-    const socket = useAuthStore.getState().socket;
-
-    socket.on("newMessage", (newMessage) => {
-      const isMessageSentFromSelectedUser = newMessage.senderId === selectedUser._id;
-      if (!isMessageSentFromSelectedUser) return;
-
-      set({
-        messages: [...get().messages, newMessage],
-      });
-    });
+  // No Socket.io on Vercel serverless, so the sidebar polls for presence
+  // (users' lastSeen) and the open conversation polls for new messages.
+  startUsersPolling: () => {
+    if (get().usersPollId) return;
+    const id = setInterval(() => get().getUsers(), USERS_POLL_INTERVAL);
+    set({ usersPollId: id });
+  },
+  stopUsersPolling: () => {
+    const id = get().usersPollId;
+    if (id) clearInterval(id);
+    set({ usersPollId: null });
   },
 
-  unsubscribeFromMessages: () => {
-    const socket = useAuthStore.getState().socket;
-    socket.off("newMessage");
+  startMessagesPolling: (userId) => {
+    get().stopMessagesPolling();
+    const id = setInterval(() => get().getMessages(userId), MESSAGES_POLL_INTERVAL);
+    set({ messagesPollId: id });
+  },
+  stopMessagesPolling: () => {
+    const id = get().messagesPollId;
+    if (id) clearInterval(id);
+    set({ messagesPollId: null });
   },
 
   setSelectedUser: (selectedUser) => set({ selectedUser }),
