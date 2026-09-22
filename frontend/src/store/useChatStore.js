@@ -17,27 +17,27 @@ export const useChatStore = create((set, get) => ({
   usersPollId: null,
   messagesPollId: null,
 
-  getUsers: async () => {
-    set({ isUsersLoading: true });
+  getUsers: async (silent = false) => {
+    if (!silent) set({ isUsersLoading: true });
     try {
       const res = await axiosInstance.get("/messages/users");
       set({ users: res.data });
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      if (!silent) toast.error(getErrorMessage(error));
     } finally {
-      set({ isUsersLoading: false });
+      if (!silent) set({ isUsersLoading: false });
     }
   },
 
-  getMessages: async (userId) => {
-    set({ isMessagesLoading: true });
+  getMessages: async (userId, silent = false) => {
+    if (!silent) set({ isMessagesLoading: true });
     try {
       const res = await axiosInstance.get(`/messages/${userId}`);
       set({ messages: res.data });
     } catch (error) {
-      toast.error(getErrorMessage(error));
+      if (!silent) toast.error(getErrorMessage(error));
     } finally {
-      set({ isMessagesLoading: false });
+      if (!silent) set({ isMessagesLoading: false });
     }
   },
   sendMessage: async (messageData) => {
@@ -54,7 +54,7 @@ export const useChatStore = create((set, get) => ({
   // (users' lastSeen) and the open conversation polls for new messages.
   startUsersPolling: () => {
     if (get().usersPollId) return;
-    const id = setInterval(() => get().getUsers(), USERS_POLL_INTERVAL);
+    const id = setInterval(() => get().getUsers(true), USERS_POLL_INTERVAL);
     set({ usersPollId: id });
   },
   stopUsersPolling: () => {
@@ -65,7 +65,7 @@ export const useChatStore = create((set, get) => ({
 
   startMessagesPolling: (userId) => {
     get().stopMessagesPolling();
-    const id = setInterval(() => get().getMessages(userId), MESSAGES_POLL_INTERVAL);
+    const id = setInterval(() => get().getMessages(userId, true), MESSAGES_POLL_INTERVAL);
     set({ messagesPollId: id });
   },
   stopMessagesPolling: () => {
